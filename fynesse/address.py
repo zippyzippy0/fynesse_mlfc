@@ -1,106 +1,80 @@
-"""
-Address module for the fynesse framework.
-
-This module handles question addressing functionality including:
-- Statistical analysis
-- Predictive modeling
-- Data visualization for decision-making
-- Dashboard creation
-"""
-
-from typing import Any, Union
-import pandas as pd
-import logging
-
-# Set up logging
-logger = logging.getLogger(__name__)
-
-# Here are some of the imports we might expect
-# import sklearn.model_selection  as ms
-# import sklearn.linear_model as lm
-# import sklearn.svm as svm
-# import sklearn.naive_bayes as naive_bayes
-# import sklearn.tree as tree
-
-# import GPy
-# import torch
-# import tensorflow as tf
-
-# Or if it's a statistical analysis
-# import scipy.stats
+import matplotlib.pyplot as plt
+import osmnx as ox
+from typing import List, Tuple, Optional
 
 
-def analyze_data(data: Union[pd.DataFrame, Any]) -> dict[str, Any]:
-    """
-    Address a particular question that arises from the data.
+class DataSolution:
+    def __init__(self, data_access):
+        self.data_access = data_access
+        self.default_features = [
+            ("building", None),
+            ("amenity", None),
+            ("amenity", "school"),
+            ("amenity", "hospital"),
+            ("amenity", "restaurant"),
+            ("amenity", "cafe"),
+            ("shop", None),
+            ("tourism", None),
+            ("tourism", "hotel"),
+            ("tourism", "museum"),
+            ("leisure", None),
+            ("leisure", "park"),
+            ("historic", None),
+            ("amenity", "place_of_worship"),
+        ]
 
-    IMPLEMENTATION GUIDE FOR STUDENTS:
-    ==================================
-
-    1. REPLACE THIS FUNCTION WITH YOUR ANALYSIS CODE:
-       - Perform statistical analysis on the data
-       - Create visualizations to explore patterns
-       - Build models to answer specific questions
-       - Generate insights and recommendations
-
-    2. ADD ERROR HANDLING:
-       - Check if input data is valid and sufficient
-       - Handle analysis failures gracefully
-       - Validate analysis results
-
-    3. ADD BASIC LOGGING:
-       - Log analysis steps and progress
-       - Log key findings and insights
-       - Log any issues encountered
-
-    4. EXAMPLE IMPLEMENTATION:
-       if data is None or len(data) == 0:
-           print("Error: No data available for analysis")
-           return {}
-
-       print("Starting data analysis...")
-       # Your analysis code here
-       results = {"sample_size": len(data), "analysis_complete": True}
-       return results
-    """
-    logger.info("Starting data analysis")
-
-    # Validate input data
-    if data is None:
-        logger.error("No data provided for analysis")
-        print("Error: No data available for analysis")
-        return {"error": "No data provided"}
-
-    if len(data) == 0:
-        logger.error("Empty dataset provided for analysis")
-        print("Error: Empty dataset provided for analysis")
-        return {"error": "Empty dataset"}
-
-    logger.info(f"Analyzing data with {len(data)} rows, {len(data.columns)} columns")
-
-    try:
-        # STUDENT IMPLEMENTATION: Add your analysis code here
-
-        # Example: Basic data summary
-        results = {
-            "sample_size": len(data),
-            "columns": list(data.columns),
-            "data_types": data.dtypes.to_dict(),
-            "missing_values": data.isnull().sum().to_dict(),
-            "analysis_complete": True,
-        }
-
-        # Example: Basic statistics (students should customize this)
-        numeric_columns = data.select_dtypes(include=["number"]).columns
-        if len(numeric_columns) > 0:
-            results["numeric_summary"] = data[numeric_columns].describe().to_dict()
-
-        logger.info("Data analysis completed successfully")
-        print(f"Analysis completed. Sample size: {len(data)}")
-
-        return results
-
-    except Exception as e:
-        logger.error(f"Error during data analysis: {e}")
-        print(f"Error analyzing data: {e}")
-        return {"error": str(e)}
+    def address_visualization(self, figsize: Tuple[int, int] = (6, 6)):
+        if any(data is None for data in [self.data_access.area, self.data_access.buildings, 
+                                       self.data_access.edges, self.data_access.nodes, self.data_access.pois]):
+            self.data_access.access_all_data()
+        
+        fig, ax = plt.subplots(figsize=figsize)
+        
+        if self.data_access.area is not None:
+            self.data_access.area.plot(ax=ax, color="tan", alpha=0.5)
+        if self.data_access.buildings is not None:
+            self.data_access.buildings.plot(ax=ax, facecolor="gray", edgecolor="gray")
+        if self.data_access.edges is not None:
+            self.data_access.edges.plot(ax=ax, linewidth=1, edgecolor="black", alpha=0.3)
+        if self.data_access.nodes is not None:
+            self.data_access.nodes.plot(ax=ax, color="black", markersize=1, alpha=0.3)
+        if self.data_access.pois is not None:
+            self.data_access.pois.plot(ax=ax, color="green", markersize=5, alpha=1)
+        
+        ax.set_xlim(self.data_access.west, self.data_access.east)
+        ax.set_ylim(self.data_access.south, self.data_access.north)
+        ax.set_title(self.data_access.place_name, fontsize=14)
+        plt.show()
+        return fig
+    
+    def address_feature_extraction(self, latitude: float, longitude: float, 
+                                 box_size_km: float = 2, features: Optional[List[Tuple]] = None):
+        if features is None:
+            features = self.default_features
+        
+        box_deg = box_size_km / 111
+        north = latitude + box_deg / 2
+        south = latitude - box_deg / 2
+        east = longitude + box_deg / 2
+        west = longitude - box_deg / 2
+        bbox = (west, south, east, north)
+        
+        keys = {k for k, _ in features}
+        tags = {k: True for k in keys}
+        
+        try:
+            pois = ox.features_from_bbox(bbox, tags=tags)
+        except:
+            return {f"{key}:{value}" if value else key: 0 for key, value in features}
+        
+        counts = {}
+        for key, value in features:
+            if key in pois.columns:
+                if value:
+                    counts[f"{key}:{value}"] = (pois[key] == value).sum()
+                else:
+                    counts[key] = pois[key].notnull().sum()
+            else:
+                counts[f"{key}:{value}" if value else key] = 0
+        
+        return counts
