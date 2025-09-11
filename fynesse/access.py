@@ -124,3 +124,6 @@ class DataAccess:
         plt.xlabel("Longitude")
         plt.ylabel("Latitude")
         plt.show()
+     def plot_city_map(place_name: str, latitude: float, longitude: float, zoom: int = 1):
+         da = DataAccess(place_name, latitude, longitude)
+         da.plot_city_map(zoom=zoom)
