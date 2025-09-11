@@ -128,6 +128,10 @@ class DataAccess:
         plt.ylabel("Latitude")
         plt.show()
 
+
+# --------------------------------------------------------------------
+# Standalone wrapper function
+# --------------------------------------------------------------------
 def plot_city_map(place_name: str, latitude: float,
                   longitude: float, zoom: int = 1):
     """
