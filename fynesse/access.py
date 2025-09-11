@@ -2,6 +2,7 @@ import osmnx as ox
 import warnings
 from typing import Dict, Optional, Tuple
 import geopandas as gpd
+import matplotlib.pyplot as plt
 
 warnings.filterwarnings("ignore", category=FutureWarning, module='osmnx')
 
@@ -67,3 +68,59 @@ class DataAccess:
             self.access_road_network()
         except:
             pass
+            
+    def plot_city_map(self, zoom: int = 1, show_pois: bool = True, show_buildings: bool = True, show_roads: bool = True):
+        """
+        Plot a city map with optional POIs, buildings, and road networks.
+        
+        Args:
+            zoom (int): scaling factor for map size.
+            show_pois (bool): if True, show Points of Interest.
+            show_buildings (bool): if True, show building footprints.
+            show_roads (bool): if True, show road networks.
+        """
+        fig, ax = plt.subplots(figsize=(8*zoom, 8*zoom))
+
+        # Plot area boundary if available
+        if self.area is None:
+            try:
+                self.access_area_boundary()
+            except:
+                pass
+        if self.area is not None:
+            self.area.plot(ax=ax, facecolor="none", edgecolor="black", linewidth=1)
+
+        # Plot buildings
+        if show_buildings:
+            if self.buildings is None:
+                try:
+                    self.access_buildings()
+                except:
+                    pass
+            if self.buildings is not None and not self.buildings.empty:
+                self.buildings.plot(ax=ax, facecolor="lightgray", edgecolor="gray", alpha=0.6)
+
+        # Plot roads
+        if show_roads:
+            if self.nodes is None or self.edges is None:
+                try:
+                    self.access_road_network()
+                except:
+                    pass
+            if self.edges is not None and not self.edges.empty:
+                self.edges.plot(ax=ax, linewidth=0.5, edgecolor="black", alpha=0.7)
+
+        # Plot POIs
+        if show_pois:
+            if self.pois is None:
+                try:
+                    self.access_pois()
+                except:
+                    pass
+            if self.pois is not None and not self.pois.empty:
+                self.pois.plot(ax=ax, color="red", markersize=5, alpha=0.7)
+
+        plt.title(f"Map of {self.place_name}", fontsize=14)
+        plt.xlabel("Longitude")
+        plt.ylabel("Latitude")
+        plt.show()
