@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import osmnx as ox
 from typing import List, Tuple, Optional
 import librosa.display
+import numpy as np
 
 
 class DataSolution:
@@ -25,8 +26,8 @@ class DataSolution:
         ]
 
     def address_visualization(self, figsize: Tuple[int, int] = (6, 6)):
-        if any(data is None for data in [self.data_access.area, self.data_access.buildings, 
-                                       self.data_access.edges, self.data_access.nodes, self.data_access.pois]):
+        if any(data is None for data in [self.data_access.area, self.data_access.buildings,
+                                         self.data_access.edges, self.data_access.nodes, self.data_access.pois]):
             self.data_access.access_all_data()
         
         fig, ax = plt.subplots(figsize=figsize)
@@ -49,7 +50,7 @@ class DataSolution:
         return fig
     
     def address_feature_extraction(self, latitude: float, longitude: float, 
-                                 box_size_km: float = 2, features: Optional[List[Tuple]] = None):
+                                   box_size_km: float = 2, features: Optional[List[Tuple]] = None):
         if features is None:
             features = self.default_features
         
@@ -79,8 +80,12 @@ class DataSolution:
                 counts[f"{key}:{value}" if value else key] = 0
         
         return counts
-  def address_audio_visualization(self, file_path: str):
-        """Plot waveform + spectrogram for a single audio file."""
+
+    def address_audio_visualization(self, file_path: str):
+        """
+        Plot waveform + spectrogram for a single audio file.
+        Useful for inspecting acoustic datasets (e.g., ESC-50, Xeno-Canto).
+        """
         y, sr = librosa.load(file_path, sr=None)
 
         fig, axes = plt.subplots(2, 1, figsize=(10, 6))
