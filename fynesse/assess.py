@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import List, Tuple, Optional
-
+import librosa
+import numpy as np
 
 class DataAssessment:
     def __init__(self, data_access):
@@ -46,3 +47,22 @@ class DataAssessment:
         print("POI Assessment Summary:")
         print(results)
         return results
+        
+def assess_esc50_distribution(self):
+        if not hasattr(self.data_access, "esc50_meta"):
+            raise ValueError("ESC-50 data not loaded in DataAccess")
+
+        df = self.data_access.esc50_meta
+        summary = df.groupby("category").size().reset_index(name="count")
+        print("ESC-50 Category Distribution:")
+        print(summary)
+        return summary
+
+def assess_audio_duration(self, sample: int = 100):
+        df = self.data_access.esc50_meta.sample(min(sample, len(self.data_access.esc50_meta)))
+        durations = []
+        for path in df["file_path"]:
+            y, sr = librosa.load(path, sr=None)
+            durations.append(len(y) / sr)
+        print(f"Average duration: {np.mean(durations):.2f}s, Std: {np.std(durations):.2f}s")
+        return durations
