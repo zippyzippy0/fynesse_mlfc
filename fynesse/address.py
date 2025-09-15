@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import osmnx as ox
 from typing import List, Tuple, Optional
+import librosa.display
 
 
 class DataSolution:
@@ -78,3 +79,20 @@ class DataSolution:
                 counts[f"{key}:{value}" if value else key] = 0
         
         return counts
+  def address_audio_visualization(self, file_path: str):
+        """Plot waveform + spectrogram for a single audio file."""
+        y, sr = librosa.load(file_path, sr=None)
+
+        fig, axes = plt.subplots(2, 1, figsize=(10, 6))
+        librosa.display.waveshow(y, sr=sr, ax=axes[0])
+        axes[0].set_title("Waveform")
+
+        S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64)
+        S_dB = librosa.power_to_db(S, ref=np.max)
+        img = librosa.display.specshow(S_dB, sr=sr, x_axis="time", y_axis="mel", ax=axes[1])
+        fig.colorbar(img, ax=axes[1], format="%+2.f dB")
+        axes[1].set_title("Mel Spectrogram")
+
+        plt.tight_layout()
+        plt.show()
+        return fig
