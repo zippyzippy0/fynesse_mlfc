@@ -3,8 +3,7 @@ import warnings
 import pandas as pd
 import torchaudio
 from torch.utils.data import Dataset
-
-# Existing geospatial imports
+import librosa
 import osmnx as ox
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -173,3 +172,17 @@ class XenoCantoAccess:
     def get_recordings(self, species_name):
         return self.df[self.df['en'] == species_name]
 
+def access_esc50(self, meta_path: str, audio_folder: str):
+        """Load ESC-50 metadata and keep file paths ready."""
+        self.esc50_meta = pd.read_csv(meta_path)
+        self.esc50_meta['file_path'] = self.esc50_meta['filename'].apply(
+            lambda f: os.path.join(audio_folder, f)
+        )
+        print(f"Loaded ESC-50: {len(self.esc50_meta)} files")
+        return self.esc50_meta
+
+def access_audio_features(self, file_path: str, sr: int = 22050):
+        """Extract MFCCs or spectrogram from an audio file."""
+        y, sr = librosa.load(file_path, sr=sr)
+        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13).mean(axis=1)
+        return mfccs
