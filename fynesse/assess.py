@@ -3,6 +3,7 @@ from typing import List, Tuple, Optional
 import librosa
 import numpy as np
 
+
 class DataAssessment:
     def __init__(self, data_access):
         self.data_access = data_access
@@ -47,8 +48,9 @@ class DataAssessment:
         print("POI Assessment Summary:")
         print(results)
         return results
-        
-def assess_esc50_distribution(self):
+
+    def assess_esc50_distribution(self):
+        """Summarize class distribution from ESC-50 metadata."""
         if not hasattr(self.data_access, "esc50_meta"):
             raise ValueError("ESC-50 data not loaded in DataAccess")
 
@@ -58,11 +60,16 @@ def assess_esc50_distribution(self):
         print(summary)
         return summary
 
-def assess_audio_duration(self, sample: int = 100):
+    def assess_audio_duration(self, sample: int = 100):
+        """Compute duration stats for a random sample of ESC-50 audio."""
+        if not hasattr(self.data_access, "esc50_meta"):
+            raise ValueError("ESC-50 data not loaded in DataAccess")
+
         df = self.data_access.esc50_meta.sample(min(sample, len(self.data_access.esc50_meta)))
         durations = []
-        for path in df["file_path"]:
+        for path in df["file_path"]:  # requires DataAccess to add this
             y, sr = librosa.load(path, sr=None)
             durations.append(len(y) / sr)
+
         print(f"Average duration: {np.mean(durations):.2f}s, Std: {np.std(durations):.2f}s")
         return durations
