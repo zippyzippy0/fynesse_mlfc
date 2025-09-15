@@ -1,4 +1,5 @@
 import os
+import torch
 import warnings
 import pandas as pd
 import torchaudio
@@ -42,6 +43,9 @@ class DataAccess:
         self.nodes = None
         self.edges = None
         self.buildings = None
+
+        # new
+        self.esc50_meta = None  
 
     def access_pois(self, tags=None):
         if tags is None:
@@ -117,63 +121,8 @@ class DataAccess:
         plt.ylabel("Latitude")
         plt.show()
 
-
-def plot_city_map(place_name: str, latitude: float,
-                  longitude: float, zoom: int = 1):
-    da = DataAccess(place_name, latitude, longitude)
-    da.plot_city_map(zoom=zoom)
-
-
-
-class ESC50Dataset(Dataset):
-    def __init__(self, csv_path, audio_path, folds=None, sr=22050, n_mels=64, duration=5):
-        self.df = pd.read_csv(csv_path)
-        if folds is not None:
-            self.df = self.df[self.df["fold"].isin(folds)]
-        self.audio_path = audio_path
-        self.sr = sr
-        self.n_mels = n_mels
-        self.duration = duration
-
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, idx):
-        row = self.df.iloc[idx]
-        filepath = os.path.join(self.audio_path, row["filename"])
-        waveform, _ = torchaudio.load(filepath)
-        waveform = waveform.mean(dim=0, keepdim=True)
-
-        num_samples = self.duration * self.sr
-        if waveform.shape[1] < num_samples:
-            pad_size = num_samples - waveform.shape[1]
-            waveform = torch.nn.functional.pad(waveform, (0, pad_size))
-        else:
-            waveform = waveform[:, :num_samples]
-
-        mel_spec = torchaudio.transforms.MelSpectrogram(
-            sample_rate=self.sr,
-            n_mels=self.n_mels
-        )(waveform)
-
-        mel_spec_db = torchaudio.transforms.AmplitudeToDB()(mel_spec)
-        return mel_spec_db, row["target"]
-
-
-
-class XenoCantoAccess:
-    def __init__(self, metadata_csv, audio_path):
-        self.df = pd.read_csv(metadata_csv)
-        self.audio_path = audio_path
-
-    def list_species(self):
-        return self.df['en'].unique()
-
-    def get_recordings(self, species_name):
-        return self.df[self.df['en'] == species_name]
-
-def access_esc50(self, meta_path: str, audio_folder: str):
-        """Load ESC-50 metadata and keep file paths ready."""
+    def access_esc50(self, meta_path: str, audio_folder: str):
+        """Load ESC-50 metadata and attach file paths."""
         self.esc50_meta = pd.read_csv(meta_path)
         self.esc50_meta['file_path'] = self.esc50_meta['filename'].apply(
             lambda f: os.path.join(audio_folder, f)
@@ -181,8 +130,9 @@ def access_esc50(self, meta_path: str, audio_folder: str):
         print(f"Loaded ESC-50: {len(self.esc50_meta)} files")
         return self.esc50_meta
 
-def access_audio_features(self, file_path: str, sr: int = 22050):
-        """Extract MFCCs or spectrogram from an audio file."""
+    def access_audio_features(self, file_path: str, sr: int = 22050):
+        """Extract MFCC features from an audio file."""
         y, sr = librosa.load(file_path, sr=sr)
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13).mean(axis=1)
         return mfccs
+
