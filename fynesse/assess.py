@@ -1,75 +1,56 @@
 import pandas as pd
-from typing import List, Tuple, Optional
-import librosa
 import numpy as np
-
+from scipy.stats import bernoulli, norm
+import pymc as pm
+import arviz as az
+import geopandas as gpd
+from shapely.geometry import Point
 
 class DataAssessment:
     def __init__(self, data_access):
         self.data_access = data_access
-        self.default_features = [
-            ("building", None),
-            ("amenity", None),
-            ("amenity", "school"),
-            ("amenity", "hospital"),
-            ("amenity", "restaurant"),
-            ("amenity", "cafe"),
-            ("shop", None),
-            ("tourism", None),
-            ("tourism", "hotel"),
-            ("tourism", "museum"),
-            ("leisure", None),
-            ("leisure", "park"),
-            ("historic", None),
-            ("amenity", "place_of_worship"),
-        ]
 
-    def assess_poi_distribution(self, features: Optional[List[Tuple]] = None):
+    def assess_poi_distribution(self):
         if self.data_access.pois is None:
             self.data_access.access_pois()
-        if features is None:
-            features = self.default_features
-            
         pois_df = pd.DataFrame(self.data_access.pois)
-        pois_df['latitude'] = pois_df.apply(lambda row: row.geometry.centroid.y, axis=1)
-        pois_df['longitude'] = pois_df.apply(lambda row: row.geometry.centroid.x, axis=1)
-        
-        poi_counts = {}
-        for key, value in features:
-            if key in pois_df.columns:
-                if value:
-                    poi_counts[f"{key}:{value}"] = (pois_df[key] == value).sum()
-                else:
-                    poi_counts[key] = pois_df[key].notnull().sum()
-            else:
-                poi_counts[f"{key}:{value}" if value else key] = 0
-        
-        results = pd.DataFrame(list(poi_counts.items()), columns=["POI Type", "Count"])
-        print("POI Assessment Summary:")
+        counts = {
+            "schools": len(self.data_access.schools) if self.data_access.schools is not None else 0,
+            "hospitals": len(self.data_access.hospitals) if self.data_access.hospitals is not None else 0
+        }
+        results = pd.DataFrame(list(counts.items()), columns=["Facility Type", "Count"])
+        print("Facility Assessment Summary:")
         print(results)
         return results
 
-    def assess_esc50_distribution(self):
-        """Summarize class distribution from ESC-50 metadata."""
-        if not hasattr(self.data_access, "esc50_meta"):
-            raise ValueError("ESC-50 data not loaded in DataAccess")
+    def assess_bernoulli_access(self, households, facilities, max_distance=5000):
+        results = []
+        for h in households.geometry:
+            dists = facilities.distance(h)
+            accessible = int((dists.min() <= max_distance))
+            results.append(accessible)
+        prob = np.mean(results)
+        print(f"Probability of access within {max_distance}m: {prob:.2f}")
+        return bernoulli(prob), prob
 
-        df = self.data_access.esc50_meta
-        summary = df.groupby("category").size().reset_index(name="count")
-        print("ESC-50 Category Distribution:")
+    def assess_gaussian_distances(self, households, facilities):
+        distances = []
+        for h in households.geometry:
+            dists = facilities.distance(h)
+            distances.append(dists.min())
+        mu, sigma = np.mean(distances), np.std(distances)
+        print(f"Gaussian fit: mean={mu:.2f}m, std={sigma:.2f}m")
+        return norm(mu, sigma), distances
+
+    def assess_bayesian_regression(self, population_density, facility_counts):
+        with pm.Model() as model:
+            alpha = pm.Normal("alpha", mu=0, sigma=10)
+            beta = pm.Normal("beta", mu=0, sigma=10)
+            sigma = pm.HalfNormal("sigma", sigma=1)
+            mu = alpha + beta * population_density
+            y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=facility_counts)
+            trace = pm.sample(1000, tune=1000, target_accept=0.9, chains=2)
+        summary = az.summary(trace)
+        print("Bayesian Regression Summary:")
         print(summary)
-        return summary
-
-    def assess_audio_duration(self, sample: int = 100):
-        """Compute duration stats for a random sample of ESC-50 audio."""
-        if not hasattr(self.data_access, "esc50_meta"):
-            raise ValueError("ESC-50 data not loaded in DataAccess")
-
-        df = self.data_access.esc50_meta.sample(min(sample, len(self.data_access.esc50_meta)))
-        durations = []
-        for path in df["file_path"]:  # requires DataAccess to add this
-            y, sr = librosa.load(path, sr=None)
-            durations.append(len(y) / sr)
-
-        print(f"Average duration: {np.mean(durations):.2f}s, Std: {np.std(durations):.2f}s")
-        return durations
+        return model, trace, summary
