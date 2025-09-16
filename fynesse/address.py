@@ -1,103 +1,83 @@
 import matplotlib.pyplot as plt
 import osmnx as ox
+import geopandas as gpd
+import pandas as pd
 from typing import List, Tuple, Optional
-import librosa.display
-import numpy as np
-
 
 class DataSolution:
     def __init__(self, data_access):
         self.data_access = data_access
-        self.default_features = [
-            ("building", None),
-            ("amenity", None),
-            ("amenity", "school"),
-            ("amenity", "hospital"),
-            ("amenity", "restaurant"),
-            ("amenity", "cafe"),
-            ("shop", None),
-            ("tourism", None),
-            ("tourism", "hotel"),
-            ("tourism", "museum"),
-            ("leisure", None),
-            ("leisure", "park"),
-            ("historic", None),
-            ("amenity", "place_of_worship"),
-        ]
 
     def address_visualization(self, figsize: Tuple[int, int] = (6, 6)):
-        if any(data is None for data in [self.data_access.area, self.data_access.buildings,
-                                         self.data_access.edges, self.data_access.nodes, self.data_access.pois]):
+        if any(data is None for data in [
+            self.data_access.area, 
+            self.data_access.buildings,
+            self.data_access.edges, 
+            self.data_access.nodes, 
+            self.data_access.schools, 
+            self.data_access.hospitals
+        ]):
             self.data_access.access_all_data()
         
         fig, ax = plt.subplots(figsize=figsize)
-        
         if self.data_access.area is not None:
-            self.data_access.area.plot(ax=ax, color="tan", alpha=0.5)
+            self.data_access.area.plot(ax=ax, color="tan", alpha=0.2)
         if self.data_access.buildings is not None:
-            self.data_access.buildings.plot(ax=ax, facecolor="gray", edgecolor="gray")
+            self.data_access.buildings.plot(ax=ax, facecolor="gray", edgecolor="gray", alpha=0.5)
         if self.data_access.edges is not None:
-            self.data_access.edges.plot(ax=ax, linewidth=1, edgecolor="black", alpha=0.3)
-        if self.data_access.nodes is not None:
-            self.data_access.nodes.plot(ax=ax, color="black", markersize=1, alpha=0.3)
-        if self.data_access.pois is not None:
-            self.data_access.pois.plot(ax=ax, color="green", markersize=5, alpha=1)
-        
-        ax.set_xlim(self.data_access.west, self.data_access.east)
-        ax.set_ylim(self.data_access.south, self.data_access.north)
-        ax.set_title(self.data_access.place_name, fontsize=14)
+            self.data_access.edges.plot(ax=ax, linewidth=0.5, edgecolor="black", alpha=0.3)
+        if self.data_access.schools is not None:
+            self.data_access.schools.plot(ax=ax, color="blue", markersize=10, label="Schools")
+        if self.data_access.hospitals is not None:
+            self.data_access.hospitals.plot(ax=ax, color="green", markersize=10, label="Hospitals")
+        plt.title(f"{self.data_access.place_name} – Schools & Hospitals", fontsize=14)
+        plt.xlabel("Longitude")
+        plt.ylabel("Latitude")
+        plt.legend()
         plt.show()
         return fig
-    
-    def address_feature_extraction(self, latitude: float, longitude: float, 
-                                   box_size_km: float = 2, features: Optional[List[Tuple]] = None):
-        if features is None:
-            features = self.default_features
-        
-        box_deg = box_size_km / 111
-        north = latitude + box_deg / 2
-        south = latitude - box_deg / 2
-        east = longitude + box_deg / 2
-        west = longitude - box_deg / 2
-        bbox = (west, south, east, north)
-        
-        keys = {k for k, _ in features}
-        tags = {k: True for k in keys}
-        
-        try:
-            pois = ox.features_from_bbox(bbox, tags=tags)
-        except:
-            return {f"{key}:{value}" if value else key: 0 for key, value in features}
-        
-        counts = {}
-        for key, value in features:
-            if key in pois.columns:
-                if value:
-                    counts[f"{key}:{value}"] = (pois[key] == value).sum()
-                else:
-                    counts[key] = pois[key].notnull().sum()
-            else:
-                counts[f"{key}:{value}" if value else key] = 0
-        
-        return counts
 
-    def address_audio_visualization(self, file_path: str):
-        """
-        Plot waveform + spectrogram for a single audio file.
-        Useful for inspecting acoustic datasets (e.g., ESC-50, Xeno-Canto).
-        """
-        y, sr = librosa.load(file_path, sr=None)
+    def address_service_density(self, population_df: pd.DataFrame, admin_col="County"):
+        results = []
+        for county, group in population_df.groupby(admin_col):
+            pop = group["Population"].sum()
+            schools = len(self.data_access.schools) if self.data_access.schools is not None else 0
+            hospitals = len(self.data_access.hospitals) if self.data_access.hospitals is not None else 0
+            density = {
+                "County": county,
+                "Population": pop,
+                "Schools per 100k": (schools / pop * 1e5) if pop > 0 else 0,
+                "Hospitals per 100k": (hospitals / pop * 1e5) if pop > 0 else 0
+            }
+            results.append(density)
+        df = pd.DataFrame(results).sort_values(by=["Schools per 100k", "Hospitals per 100k"], ascending=True)
+        print("Service Density Ranking:")
+        print(df)
+        return df
 
-        fig, axes = plt.subplots(2, 1, figsize=(10, 6))
-        librosa.display.waveshow(y, sr=sr, ax=axes[0])
-        axes[0].set_title("Waveform")
+    def address_rural_vs_urban(self, population_df: pd.DataFrame, urban_col="Urban", admin_col="County"):
+        results = []
+        for key, group in population_df.groupby([admin_col, urban_col]):
+            pop = group["Population"].sum()
+            schools = len(self.data_access.schools) if self.data_access.schools is not None else 0
+            hospitals = len(self.data_access.hospitals) if self.data_access.hospitals is not None else 0
+            results.append({
+                "County": key[0],
+                "Urban/Rural": key[1],
+                "Population": pop,
+                "Schools per 100k": (schools / pop * 1e5) if pop > 0 else 0,
+                "Hospitals per 100k": (hospitals / pop * 1e5) if pop > 0 else 0
+            })
+        df = pd.DataFrame(results)
+        print("Urban vs Rural Service Density:")
+        print(df)
+        return df
 
-        S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64)
-        S_dB = librosa.power_to_db(S, ref=np.max)
-        img = librosa.display.specshow(S_dB, sr=sr, x_axis="time", y_axis="mel", ax=axes[1])
-        fig.colorbar(img, ax=axes[1], format="%+2.f dB")
-        axes[1].set_title("Mel Spectrogram")
-
-        plt.tight_layout()
-        plt.show()
-        return fig
+    def address_priority_regions(self, service_density_df, threshold=1.0):
+        underserved = service_density_df[
+            (service_density_df["Schools per 100k"] < threshold) |
+            (service_density_df["Hospitals per 100k"] < threshold)
+        ]
+        print("Priority Regions (underserved):")
+        print(underserved)
+        return underserved
